@@ -93,10 +93,4 @@ AIggyGit/
 
 ## License
 
-Copyright (C) 2026 Zheyuan Chen
-
-本项目采用 [GNU General Public License v3.0](LICENSE) 授权。
-
-这是一个 copyleft 协议：你可以自由使用、修改和分发本项目，但任何基于本项目的
-衍生作品在分发时**必须同样以 GPL-3.0 开源并提供源代码**。本项目不提供任何担保，
-详见 LICENSE 全文。
+[MIT](LICENSE) © 2026 Zheyuan Chen
