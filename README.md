@@ -93,4 +93,4 @@ AIggyGit/
 
 ## License
 
-尚未选择。
+[MIT](LICENSE) © 2026 Zheyuan Chen
