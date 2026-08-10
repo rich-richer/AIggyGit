@@ -5,7 +5,15 @@
 
 import pytest
 
-from aiggygit.safety import RejectedCommand, Risk, classify, parse
+from aiggygit.safety import (
+    RejectedCommand,
+    Risk,
+    analyze,
+    classify,
+    parse,
+    split_chain,
+    worst_risk,
+)
 
 
 class TestParse:
@@ -126,6 +134,30 @@ class TestClassify:
     def test_长参数带值写法也能识别(self, command):
         assert classify(command).risk is Risk.DANGEROUS
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git checkout -- .",  # 新手撤销修改最常抄到的写法
+            "git checkout -- src/app.py",
+            "git checkout .",
+            "git checkout --force main",
+        ],
+    )
+    def test_checkout_覆盖文件的写法是危险的(self, command):
+        # 这几条会永久丢弃未提交的改动，reflog 也救不回来
+        assert classify(command).risk is Risk.DANGEROUS
+
+    def test_单纯切分支不算危险(self):
+        assert classify("git checkout main").risk is Risk.CAUTION
+        assert classify("git switch main").risk is Risk.CAUTION
+
+    @pytest.mark.parametrize(
+        "command", ["git checkout main", "git switch dev", "git stash", "git gc"]
+    )
+    def test_已知子命令不落进未识别兜底(self, command):
+        # 这些子命令在危险表里有条目但没命中危险参数，报「未识别」既不准也误导
+        assert "未识别" not in classify(command).reason
+
     def test_不把长参数误判成短参数簇(self):
         # --format 里有字母 f，但它是长参数，不该被 push 的 -f 规则命中
         assert classify("git log --format=%H").risk is Risk.SAFE
@@ -133,3 +165,41 @@ class TestClassify:
     def test_每个判定都带原因(self):
         for command in ["git status", "git commit -m x", "git reset --hard"]:
             assert classify(command).reason
+
+
+class TestAnalyze:
+    """解释路径。和执行路径的关键区别：串联命令要能拆开看，而不是直接拒绝。"""
+
+    def test_拆分串联命令(self):
+        assert split_chain("git add . && git commit -m x") == [
+            "git add .",
+            "git commit -m x",
+        ]
+        assert split_chain("git fetch; git merge") == ["git fetch", "git merge"]
+        assert split_chain("git pull || git status") == ["git pull", "git status"]
+
+    def test_单条命令拆出来还是一条(self):
+        assert split_chain("git status") == ["git status"]
+
+    def test_串联命令逐段分级(self):
+        # 这是从网上抄命令最典型的形态，执行路径会拒绝，解释路径必须支持
+        segments = analyze("git checkout -- . && git clean -fd")
+        assert len(segments) == 2
+        assert all(seg.verdict is not None for seg in segments)
+        assert segments[1].verdict.risk is Risk.DANGEROUS
+
+    def test_整体风险取最高的一段(self):
+        segments = analyze("git status && git reset --hard")
+        assert worst_risk(segments) is Risk.DANGEROUS
+
+    def test_analyze_不抛异常(self):
+        # 分不了级的段落也要返回，把原因写进 problem —— 用户需要知道哪段看不懂，
+        # 而不是整条命令直接报错
+        segments = analyze("git status && rm -rf /tmp/x")
+        assert len(segments) == 2
+        assert segments[0].verdict is not None
+        assert segments[1].verdict is None
+        assert segments[1].problem
+
+    def test_全都分不了级时返回_None(self):
+        assert worst_risk(analyze("rm -rf /")) is None

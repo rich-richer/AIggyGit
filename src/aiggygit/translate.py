@@ -54,6 +54,44 @@ _SYSTEM = """你是一个 git 助手，服务对象是**不熟悉 git 的新手*
 你会拿到当前仓库的状态，请结合它生成准确的命令（比如分支名、文件名要对得上）。"""
 
 
+_EXPLAIN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {
+            "type": "string",
+            "description": "一句话说清这条命令的作用。",
+        },
+        "detail": {
+            "type": "string",
+            "description": "逐部分解释，包括每个参数的含义。写给新手看，不要术语堆砌。",
+        },
+        "risk_note": {
+            "type": "string",
+            "description": "执行后会不会丢东西、丢什么、能不能找回来。没有风险就写没有风险。",
+        },
+        "safer_alternative": {
+            "type": "string",
+            "description": "如果有更安全的替代做法就给出来；没有则填空字符串。",
+        },
+    },
+    "required": ["summary", "detail", "risk_note", "safer_alternative"],
+    "additionalProperties": False,
+}
+
+_EXPLAIN_SYSTEM = """你在向一个**不熟悉 git 的新手**解释一条命令。
+
+用户通常是从网上抄到这条命令，还没执行，想先搞清楚它是干什么的。
+
+规则：
+- 用中文，说人话。不要罗列参数手册，要说「执行完之后会变成什么样」。
+- detail 里逐个解释参数，但要结合这条命令的实际语境，别背文档。
+- risk_note 必须诚实：会丢数据就明说会丢什么、能不能找回来。不会丢也要明说。
+- 如果这条命令有更安全的替代写法（比如用 revert 代替 reset --hard，
+  或者先 stash 保存一份），在 safer_alternative 里给出来。确实没有就留空。
+- 命令可能是用 && 串起来的多条。那就整体解释它们连起来达成什么效果。
+- 如果命令有明显问题（参数写错、危险且没有必要），直接指出来。"""
+
+
 class TranslationError(Exception):
     """翻译失败。消息是给用户看的，要能直接打印。"""
 
@@ -64,6 +102,14 @@ class Suggestion:
     explanation: str
     confidence: str
     note: str
+
+
+@dataclass
+class Explanation:
+    summary: str
+    detail: str
+    risk_note: str
+    safer_alternative: str
 
 
 def load_dotenv(path: Path | None = None) -> None:
@@ -84,8 +130,8 @@ def load_dotenv(path: Path | None = None) -> None:
             os.environ[key] = value.strip().strip("\"'")
 
 
-def translate(request: str, repo_context: str) -> Suggestion:
-    """把一句自然语言翻译成一条 git 命令。"""
+def _request(system: str, schema: dict, user_content: str) -> dict:
+    """调一次 API，返回解析好的 JSON。翻译和解释共用这条路径。"""
     try:
         import anthropic
     except ImportError:
@@ -110,21 +156,13 @@ def translate(request: str, repo_context: str) -> Suggestion:
             model=model,
             # 给足空间：thinking 和回复共用这个上限，卡太紧会截断
             max_tokens=8192,
-            system=_SYSTEM,
+            system=system,
             output_config={
-                # 翻译一句话不需要深思，low 又快又省
+                # 这类任务不需要深思，low 又快又省
                 "effort": "low",
-                "format": {"type": "json_schema", "schema": _SCHEMA},
+                "format": {"type": "json_schema", "schema": schema},
             },
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"仓库当前状态：\n{repo_context}\n\n"
-                        f"我想做的事：{request}"
-                    ),
-                }
-            ],
+            messages=[{"role": "user", "content": user_content}],
         )
     except anthropic.AuthenticationError:
         raise TranslationError("API Key 无效，检查 ANTHROPIC_API_KEY") from None
@@ -144,10 +182,33 @@ def translate(request: str, repo_context: str) -> Suggestion:
     if not text:
         raise TranslationError("模型没有返回内容")
 
-    data = json.loads(text)  # output_config.format 保证了这里是合法 JSON
+    return json.loads(text)  # output_config.format 保证了这里是合法 JSON
+
+
+def translate(request: str, repo_context: str) -> Suggestion:
+    """把一句自然语言翻译成一条 git 命令。"""
+    data = _request(
+        _SYSTEM,
+        _SCHEMA,
+        f"仓库当前状态：\n{repo_context}\n\n我想做的事：{request}",
+    )
     return Suggestion(
         command=data["command"].strip(),
         explanation=data["explanation"].strip(),
         confidence=data["confidence"],
         note=data["note"].strip(),
+    )
+
+
+def explain_command(command: str, repo_context: str | None = None) -> Explanation:
+    """解释一条 git 命令。不执行，只解释。"""
+    content = f"请解释这条命令：\n{command}"
+    if repo_context:
+        content += f"\n\n（供参考的仓库当前状态）\n{repo_context}"
+    data = _request(_EXPLAIN_SYSTEM, _EXPLAIN_SCHEMA, content)
+    return Explanation(
+        summary=data["summary"].strip(),
+        detail=data["detail"].strip(),
+        risk_note=data["risk_note"].strip(),
+        safer_alternative=data["safer_alternative"].strip(),
     )

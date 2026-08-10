@@ -16,6 +16,9 @@ dist/
 # Claude Code local settings
 .claude/settings.local.json
 
+# playwright-mcp 抓网页时留下的快照和控制台日志
+.playwright-mcp/
+
 # macOS
 .DS_Store
 ._*

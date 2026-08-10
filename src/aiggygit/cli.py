@@ -44,6 +44,65 @@ def cmd_status() -> int:
     return 0
 
 
+def cmd_explain(command: str) -> int:
+    """解释一条命令。**永远不执行任何东西。**"""
+    command = command.strip()
+    if not command:
+        _err('要解释什么？用法：aig explain "git reset --hard HEAD~1"')
+        return 1
+
+    segments = safety.analyze(command)
+    chained = len(segments) > 1
+    print(f"\n  {_paint(command, 'bold')}\n")
+
+    # 分级是本地规则判断，没网也能用 —— 新手最急需的正是这部分
+    if chained:
+        print(f"  这条命令由 {len(segments)} 段串联而成，会依次执行：\n")
+    for i, seg in enumerate(segments, 1):
+        if chained:
+            # 单条命令时上面已经打印过了，不重复
+            print(f"  [{i}] {seg.command}")
+        if seg.verdict:
+            color, label = _RISK_LABEL[seg.verdict.risk]
+            print(f"      {_paint(label, color)} —— {seg.verdict.reason}")
+        else:
+            print(f"      {_paint('无法分级', 'yellow')} —— {seg.problem}")
+
+    unassessed = [seg for seg in segments if seg.verdict is None]
+    if unassessed:
+        # 有评估不了的部分时绝不能给「安全」这种结论 —— 用户会当成整条命令的判断。
+        # 宁可说不知道，也不能给虚假的安心。
+        print(
+            _paint(
+                f"\n  ⚠ 整体风险无法判定：有 {len(unassessed)} 段不是 git 命令，"
+                "本工具评估不了，请自行确认它们做什么。",
+                "yellow",
+            )
+        )
+    elif chained:
+        color, label = _RISK_LABEL[safety.worst_risk(segments)]
+        print(f"\n  整体风险：{_paint(label, color)}（取最高的一段）")
+
+    # AI 解释是加分项，拿不到也不影响上面的分级
+    try:
+        exp = translate.explain_command(command)
+    except translate.TranslationError as exc:
+        print(_paint(f"\n  详细解释需要 API：{exc}", "dim"))
+        return 0
+
+    print(f"\n  {_paint('这条命令做什么', 'bold')}")
+    print(f"  {exp.summary}\n")
+    print(f"  {exp.detail}")
+    if exp.risk_note:
+        print(f"\n  {_paint('会不会丢东西', 'bold')}")
+        print(f"  {exp.risk_note}")
+    if exp.safer_alternative:
+        print(f"\n  {_paint('更安全的做法', 'bold')}")
+        print(f"  {exp.safer_alternative}")
+    print(_paint("\n  （explain 只解释，不执行任何命令）", "dim"))
+    return 0
+
+
 def _confirm(verdict: safety.Verdict, assume_yes: bool) -> bool:
     """按风险等级决定要不要问、怎么问。
 
@@ -119,7 +178,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aig",
         description="AI 辅助 Git 操作的命令行工具",
-        epilog='示例：\n  aig status\n  aig "把这些改动提交了，说明是修复登录问题"\n  aig --dry-run "撤销上一次提交"',
+        epilog=(
+            "示例：\n"
+            "  aig status\n"
+            '  aig "把这些改动提交了，说明是修复登录问题"\n'
+            '  aig explain "git reset --hard HEAD~1"\n'
+            '  aig --dry-run "撤销上一次提交"'
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"aiggygit {__version__}")
@@ -148,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.request == ["status"]:
         return cmd_status()
+
+    if args.request[0] == "explain":
+        return cmd_explain(" ".join(args.request[1:]))
 
     try:
         return cmd_ask(

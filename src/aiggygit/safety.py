@@ -63,7 +63,14 @@ _DANGEROUS: dict[str, dict[str | None, str]] = {
     "filter-branch": {None: "会重写整个仓库历史，属于核弹级操作"},
     "gc": {"--prune": "会清理无法访问的对象，清理后 reflog 里的东西也找不回来了"},
     "update-ref": {None: "会直接改写引用，绕过所有常规保护"},
-    "checkout": {"--force": "会丢弃工作区改动", "-f": "会丢弃工作区改动"},
+    "checkout": {
+        "--force": "会丢弃工作区改动",
+        "-f": "会丢弃工作区改动",
+        # `git checkout -- <路径>` 和 `git checkout .` 是「用版本库里的内容覆盖这些文件」，
+        # 新手最容易在这里丢东西 —— 从网上抄「怎么撤销修改」抄到的往往就是这条
+        "--": "会用版本库里的内容覆盖指定文件，未提交的改动永久丢失，git 也找不回来",
+        ".": "会用版本库里的内容覆盖当前目录下所有文件，未提交的改动永久丢失",
+    },
     "switch": {"--force": "会丢弃工作区改动", "-f": "会丢弃工作区改动"},
     "restore": {None: "会用其他版本覆盖当前文件，未提交的改动会丢失"},
     "stash": {"drop": "会删除一条 stash 记录", "clear": "会删除全部 stash 记录"},
@@ -84,6 +91,12 @@ _CAUTION_REASONS: dict[str, str] = {
     "tag": "会创建或改动标签",
     "apply": "会应用补丁到工作区",
     "mv": "会移动或重命名文件",
+    # 下面这些子命令在 _DANGEROUS 里也有条目。没命中那里的危险参数时会落到这儿，
+    # 而不是掉进「未识别」兜底 —— 报「未识别 checkout」既不准确也会误导用户。
+    "checkout": "会切换分支或恢复文件",
+    "switch": "会切换分支",
+    "stash": "会把当前改动暂存起来",
+    "gc": "会清理仓库里的冗余数据",
 }
 
 # shell 元字符。命令里出现任何一个就直接拒绝 —— 我们用 subprocess 传数组执行，
@@ -119,6 +132,48 @@ def parse(command: str) -> list[str]:
         raise RejectedCommand("缺少 git 子命令")
 
     return parts
+
+
+@dataclass(frozen=True)
+class Segment:
+    """命令链里的一段。verdict 为 None 表示这段没法分级，原因在 problem 里。"""
+
+    command: str
+    verdict: Verdict | None = None
+    problem: str | None = None
+
+
+def split_chain(command: str) -> list[str]:
+    """把 `&&`、`||`、`;` 串起来的命令拆成独立几段。
+
+    **只用于解释，绝不用于执行。**从网上抄来的命令十有八九是串联的，
+    执行路径拒绝它们是对的，但解释路径必须能拆开看 —— 恰恰是这种命令最需要被解释。
+    """
+    segments = [command]
+    for sep in ("&&", "||", ";"):
+        segments = [piece for seg in segments for piece in seg.split(sep)]
+    return [seg.strip() for seg in segments if seg.strip()]
+
+
+def analyze(command: str) -> list[Segment]:
+    """逐段分析一条（可能是串联的）命令，给解释用。
+
+    和 classify 的区别：这个函数不抛异常。分不了级的段落照样返回，
+    把原因写在 problem 里 —— 用户需要知道「这段我看不懂」，而不是整条命令报错。
+    """
+    result: list[Segment] = []
+    for piece in split_chain(command):
+        try:
+            result.append(Segment(piece, verdict=classify(piece)))
+        except RejectedCommand as exc:
+            result.append(Segment(piece, problem=str(exc)))
+    return result
+
+
+def worst_risk(segments: list[Segment]) -> Risk | None:
+    """整条命令链里最高的风险等级。全都分不了级时返回 None。"""
+    risks = [seg.verdict.risk for seg in segments if seg.verdict]
+    return max(risks, key=lambda r: r.value) if risks else None
 
 
 def _matches(flag: str, args: list[str]) -> bool:
