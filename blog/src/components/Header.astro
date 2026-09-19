@@ -1,0 +1,29 @@
+---
+import { localizePath, ui, type Locale } from '../i18n';
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+}
+
+const { locale, currentPath } = Astro.props;
+const t = ui[locale];
+const zhHref = localizePath(currentPath, 'zh');
+const enHref = localizePath(currentPath, 'en');
+const homeHref = locale === 'en' ? '/en' : '/';
+---
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href={homeHref}>
+      <p class="brand-kicker">{t.siteKicker}</p>
+      <p class="brand-name">{t.siteName}</p>
+    </a>
+    <div class="header-tools">
+      <nav class="lang-switch" aria-label={locale === 'en' ? 'Language' : '语言'}>
+        <a href={zhHref} aria-current={locale === 'zh' ? 'page' : undefined}>中文</a>
+        <a href={enHref} aria-current={locale === 'en' ? 'page' : undefined}>EN</a>
+      </nav>
+    </div>
+  </div>
+</header>

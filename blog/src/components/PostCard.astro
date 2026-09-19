@@ -1,0 +1,23 @@
+---
+import { displayDescription, displayTitle, formatDate, ui, type Locale } from '../i18n';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+  locale: Locale;
+}
+
+const { post, locale } = Astro.props;
+const t = ui[locale];
+const href = locale === 'en' ? `/en/posts/${post.id}` : `/posts/${post.id}`;
+---
+
+<a class="post-card" href={href}>
+  <div class="card-meta">
+    <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date, locale)}</time>
+    <span class="badge">{post.data.lang === 'zh' ? t.originalZh : 'EN'}</span>
+  </div>
+  <h2>{displayTitle(post.data, locale)}</h2>
+  <p>{displayDescription(post.data, locale)}</p>
+  <span class="read-cue">{t.read} →</span>
+</a>

@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import { listPosts } from '../lib/posts';
+import { ui, type Locale } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = ui[locale];
+const posts = await listPosts();
+---
+
+<BaseLayout title={t.siteName} description={t.intro} locale={locale} currentPath="/">
+  <section class="hero">
+    <h1>{t.latest}</h1>
+    <p>{t.intro}</p>
+  </section>
+  {
+    posts.length === 0 ? (
+      <p class="empty">{t.empty}</p>
+    ) : (
+      <div class="grid">
+        {posts.map((post) => (
+          <PostCard post={post} locale={locale} />
+        ))}
+      </div>
+    )
+  }
+</BaseLayout>

@@ -2,6 +2,72 @@
 
 > 用大白话指挥 Git —— 一个面向新手的 AI 辅助命令行工具。
 
+本仓库同时放了一个**中文优先、可切英文界面**的理财入门静态博客，首篇文章来自 Notion 简报《📘 理财入门 2026-09-18》。博客只做教育，不构成投资建议，也不推荐买入或卖出任何股票、基金或数字币。
+
+## 理财入门博客
+
+技术栈：[Astro](https://astro.build) 静态站点，正文用 Markdown。仓库根目录的 `npm` 脚本通过 workspace 调用 `blog/`。
+
+### 安装与本地运行
+
+需要 Node.js 18+（建议 22）。
+
+```bash
+npm install
+npm run dev
+```
+
+浏览器打开 <http://localhost:4321> 。首页列出文章；点进去即可阅读全文。英文界面在 `/en/`，正文仍为中文原文。
+
+预览生产构建：
+
+```bash
+npm run build
+npm run preview
+```
+
+构建产物在 `blog/dist/`。
+
+### 文章放在哪里
+
+| 路径 | 用途 |
+| --- | --- |
+| `blog/src/content/posts/` | 每一篇课次一篇 Markdown |
+| `blog/src/pages/` | 首页与文章路由 |
+| `blog/src/i18n.ts` | 中/英界面文案 |
+
+当前首篇：
+
+- 文件：`blog/src/content/posts/finance-primer-2026-09-18.md`
+- 地址：`/posts/finance-primer-2026-09-18/`
+- 日期：2026-09-18
+- 来源（仅引用）：https://app.notion.com/p/3df752b888a581419eeaeda71d97ec18
+
+### 如何加入下一篇 Notion 简报
+
+1. 在 `blog/src/content/posts/` 新建 `your-slug.md`（英文短横线 slug 即可，例如 `finance-primer-2026-09-19.md`）。
+2. 文件头写上 frontmatter，至少包括 `title`、`description`、`date`；需要英文卡片时再加 `titleEn`、`descriptionEn`。
+3. 把 Notion 导出的中文正文贴在 frontmatter 下面。保留开头免责声明、数字与出处链接，不要改写行情、不要加荐买语句。
+4. 保存后重新 `npm run dev`，首页会自动出现新课次。
+
+Frontmatter 示例：
+
+```markdown
+---
+title: 📘 理财入门 2026-09-19
+titleEn: "Finance Primer — 19 Sep 2026"
+description: 仅供学习，不构成投资建议。
+date: 2026-09-19
+lang: zh
+sourceUrl: https://app.notion.com/p/你的页面id
+---
+
+> 仅供学习，不构成投资建议。
+
+## 开头免责声明
+...
+```
+
 ## 简介
 
 Git 的难点从来不是敲不出命令，而是**不知道该敲哪条**，以及**敲错了会怎样**。
@@ -124,6 +190,8 @@ aig "把所有改动都扔掉，回到上次提交的状态"
 
 ```
 AIggyGit/
+├── blog/                         # 理财入门静态博客（Astro）
+│   └── src/content/posts/        # 课次 Markdown，在此追加下一篇
 ├── src/aiggygit/
 │   ├── cli.py         # 命令行入口、确认流程
 │   ├── safety.py      # 命令风险分级（纯规则，不经过 AI）

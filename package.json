@@ -1,0 +1,11 @@
+{
+  "name": "aiggygit-workspace",
+  "private": true,
+  "description": "AIggyGit CLI 与理财入门博客",
+  "workspaces": ["blog"],
+  "scripts": {
+    "dev": "npm run dev -w blog",
+    "build": "npm run build -w blog",
+    "preview": "npm run preview -w blog"
+  }
+}

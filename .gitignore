@@ -25,6 +25,11 @@ dist/
 .Spotlight-V100
 .Trashes
 
+# Node / Astro blog
+node_modules/
+blog/dist/
+blog/.astro/
+
 # Editor
 .vscode/
 .idea/
