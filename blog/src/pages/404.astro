@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { ui } from '../i18n';
+
+const t = ui.zh;
+---
+
+<BaseLayout title={t.notFound} description={t.notFoundHint} currentPath="/">
+  <section class="hero">
+    <h1>{t.notFound}</h1>
+    <p>{t.notFoundHint}</p>
+    <p><a class="back" href="/">← {t.backHome}</a></p>
+  </section>
+</BaseLayout>

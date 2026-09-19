@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { render, type CollectionEntry } from 'astro:content';
+import { displayTitle, formatDate, ui, type Locale } from '../i18n';
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+  locale: Locale;
+}
+
+const { post, locale } = Astro.props;
+const t = ui[locale];
+const { Content } = await render(post);
+const homeHref = locale === 'en' ? '/en' : '/';
+const currentPath = `/posts/${post.id}`;
+---
+
+<BaseLayout
+  title={displayTitle(post.data, locale)}
+  description={locale === 'en' && post.data.descriptionEn ? post.data.descriptionEn : post.data.description}
+  locale={locale}
+  currentPath={currentPath}
+>
+  <a class="back" href={homeHref}>← {t.backHome}</a>
+  <article class="article">
+    <header class="article-head">
+      <p class="kicker">{t.siteKicker}</p>
+      <h1>{displayTitle(post.data, locale)}</h1>
+      <p class="meta">
+        <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date, locale)}</time>
+        {
+          post.data.sourceUrl && (
+            <>
+              {' · '}
+              <a href={post.data.sourceUrl} rel="noopener noreferrer">{t.source}</a>
+            </>
+          )
+        }
+      </p>
+      {locale === 'en' && <p class="lang-note">{t.langNote}</p>}
+    </header>
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
